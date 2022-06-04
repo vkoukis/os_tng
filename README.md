@@ -45,7 +45,8 @@ debugger to inspect and manipulate the machine directly.
 
 1. In a different terminal, start `gdb` and ask it to use QEMU as the remote
    target. Due to a [bug in the way QEMU interacts with
-   gdb](https://sourceware.org/bugzilla/show_bug.cgi?id=22869), you have to do
+   gdb](https://sourceware.org/bugzilla/show_bug.cgi?id=22869),
+   [duplicate here](https://gitlab.com/qemu-project/qemu/-/issues/141), you have to do
    some extra configuration on the gdb side to debug 16-bit x86 code in real mode.
 
       ```
