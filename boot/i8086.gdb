@@ -187,8 +187,6 @@ define print_data
 		printf "\n"
 		set $i++
 	  end
-	  
-	  
        end
 end
 
@@ -208,7 +206,7 @@ define context
   print_regs
   print_eflags
   printf "---------------------------[ CODE ]----\n"
-  
+
   set $_code_size = $CODE_SIZE
 
   # disassemble
@@ -274,10 +272,10 @@ end
 define stepo
   ## we know that an opcode starting by 0xE8 has a fixed length
   ## for the 0xFF opcodes, we can enumerate what is possible to have
-  
+
   set $lip = $rip
   set $offset = 0
-  
+
   # first, get rid of segment prefixes, if any
   set $_byte1 = *(unsigned char *)$rip
   # CALL DS:xx CS:xx, etc.
@@ -288,9 +286,9 @@ define stepo
   end
   set $_byte2 = *(unsigned char *)($lip+1)
   set $_byte3 = *(unsigned char *)($lip+2)
-  
+
   set $noffset = 0
-  
+
   if ($_byte1 == 0xE8)
     # call near
     set $noffset = 3
@@ -301,7 +299,7 @@ define stepo
       set $_reg = ($_byte2 & 0x38) >> 3
       set $_rm  = ($_byte2 & 7)
       #printf "mod: %d reg: %d rm: %d\n", $_mod, $_reg, $_rm
-      
+
       # only for CALL instructions
       if ($_reg == 2 || $_reg == 3)
 	
@@ -339,13 +337,12 @@ define stepo
 	  set $noffset = 2
 	end
       end
-      
     end
     # end of byte1 == 0xff
   end
   # else byte1 != 0xe8
-  
-  # if we have found a call to bypass we set a temporary breakpoint on next instruction and continue 
+
+  # if we have found a call to bypass we set a temporary breakpoint on next instruction and continue
   if ($noffset != 0)
     set $_nextaddress = $eip + $offset + $noffset
     printf "Setting BP to %04X\n", $_nextaddress
@@ -446,7 +443,7 @@ define step_until_code
   set $_found = 0
   while (!$_found)
     set $_i = 0
-    set $_found = 1  
+    set $_found = 1
 
     while ($_tofind[$_i] != 0 && $_found == 1)
       set $_b = *((char*)$rip + $_i)
