@@ -141,6 +141,7 @@ skip2:
 	jmp _vgamsg		; Show one more message on the screen
 
 l1:
+	hlt
 	jmp l1
 
 	times 0200h - 2 - ($ - $$) \
