@@ -124,12 +124,12 @@ Boot sector
 -----------
 
 Let's assemble and boot a simple 512-byte boot sector using the BIOS.
-File `boot/floppy0.asm` defines a boot sector like this, adapted from
+File `boot/floppy0.raw.asm` defines a boot sector like this, adapted from
 [here](https://en.wikibooks.org/wiki/X86_Assembly/Bootloaders).
    ```
    $ cd boot
-   $ nasm -f bin floppy0.asm
-   $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.bin -display curses
+   $ nasm -f bin floppy0.raw.asm -o floppy0.raw.bin
+   $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.raw.bin -display curses
    ```
 
 To quit the VM:
@@ -156,7 +156,7 @@ debugger to inspect and manipulate the machine directly.
 1. Start QEMU, but have it wait for a connection from gdb at `localhost:1234`
    [option `-s`], without starting the emulated CPU at all [option `-S`]:
       ```
-      $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.bin -display curses -s -S
+      $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.raw.bin -display curses -s -S
       ```
 
 1. In a different terminal, start `gdb` and ask it to use QEMU as the remote
