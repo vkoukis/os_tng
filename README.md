@@ -20,8 +20,9 @@ The boot process consists of the following main stages:
 
 1. **CPU Reset:** The CPU receives power, and initializes itself to a specific
    Reset state. Where is the Instruction Pointer? It points to a specific
-   "Reset Vector". For Intel processors, this is 16 bytes below the last physical
-   address, `0xFFFFFFF0` for the i386. More on this below.
+   "Reset Vector". For Intel processors in general, this is 16 bytes below the
+   last physical address; In the case of the i386, this is `0xFFFFFFF0`. More
+   on this later on.
 
       ![Intel x86 memory map on reset](https://manybutfinite.com/img/boot/bootMemoryRegions.png)
 
@@ -132,7 +133,6 @@ File `boot/floppy0.asm` defines a boot sector like this, adapted from
    ```
 
 To quit the VM:
-
    ```
    [Move to the QEMU monitor prompt with Alt-2]
    (qemu) quit
@@ -155,7 +155,6 @@ debugger to inspect and manipulate the machine directly.
 
 1. Start QEMU, but have it wait for a connection from gdb at `localhost:1234`
    [option `-s`], without starting the emulated CPU at all [option `-S`]:
-
       ```
       $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.bin -display curses -s -S
       ```
@@ -165,7 +164,6 @@ debugger to inspect and manipulate the machine directly.
    gdb](https://sourceware.org/bugzilla/show_bug.cgi?id=22869),
    [duplicate here](https://gitlab.com/qemu-project/qemu/-/issues/141), you have to do
    some extra configuration on the gdb side to debug 16-bit x86 code in real mode.
-
       ```
       $ gdb
       (gdb) target remote localhost:1234
@@ -173,6 +171,7 @@ debugger to inspect and manipulate the machine directly.
       (gdb) set architecture i8086
       ```
 
+   > **Note**
 1. Inspect the state of the VM. This is the state of the VM at reset, more on this below.
       ```
       (gdb) info registers
@@ -214,7 +213,27 @@ Interesting resources:
 Reset vector
 ------------
 
-Let's use gdb to inspect the current state of the VM.
+Use QEMU to inspect the current state of the VM, right after reset:
+
+1. Press `Alt-2` to move to the QEMU monitor, and use the `info registers` command:
+      ```
+      (qemu) info registers
+      ```
+
+   Note the CS descriptor base is waaaay over 1MB (essentially,
+   [Unreal mode](https://wiki.osdev.org/Unreal_Mode))
+
+1. Note how the first command is a `JMP FAR` command:
+      ```
+      (qemu) x/i 0xfffffff0
+      ```
+
+1. Note how it jumps back into the ISA BIOS region, where QEMU has already mapped SeaBIOS.
+      ```
+      (qemu) info mtree
+      ```
+
+Use gdb to inspect the current state of the VM:
 
 1. Disassemble 10 instructions:
       ```
@@ -231,25 +250,25 @@ Let's use gdb to inspect the current state of the VM.
       (gdb) x/10xb 0xffff0
       ```
 
-   > **Note:***
-   > Breakpoints must be 32-bit EIP addresses:
-   > https://stackoverflow.com/questions/32955887/how-to-disassemble-16-bit-x86-boot-sector-code-in-gdb-with-x-i-pc-it-gets-tr
+   > **Note**
+   > Breakpoints must be 32-bit EIP addresses, see here for [some more context](https://stackoverflow.com/questions/32955887/how-to-disassemble-16-bit-x86-boot-sector-code-in-gdb-with-x-i-pc-it-gets-tr).
 
-1. Inspect registers:
+1. Inspect CPU registers:
       ```
       (gdb) info registers
       ```
 
-   Note CS:IP points to f000:fff0 --> 0xffff0, right below 1MB of memory
-
 > **Note**
-> The legacy 8086 uses `FFFF:0000` as its reset vector
+> The legacy 8086 used `FFFF:0000` --> `0xFFFF0` as its reset vector, see section [System Reset](http://bitsavers.informatik.uni-stuttgart.de/components/intel/_dataBooks/1981_iAPX_86_88_Users_Manual.pdf).
+> Note how `CS:IP` in QEMU's emulated i386 points to F000:FFF0 --> 0xFFFF0, at
+> exactly the same location, right below 1MB of memory. This allows for
+> backwards compatibility with the 8086.
 
 Interesting resources:
 
    * [Intel 64 and IA-32 Architectures Developer's Manual: Vol.
      3A](https://www.intel.com/content/www/us/en/architecture-and-technology/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.html),
-     the authoritative documentation on low-level programming in assembly on
+     the authoritative documentation on low-level programming in Assembly on
      the Intel x86 architecture.
 
    * [Legacy iAPX 86,88 User's
@@ -257,6 +276,40 @@ Interesting resources:
      a much older, much simpler manual by Intel for the 8086/88. Contains
      simple descriptions of how interrupts, ports, exceptions work. Ignore some
      really obsolete sections [PL/M?]
+
+   * [Software initialization code at 0xFFFFFFF0H](https://stackoverflow.com/questions/9210296/software-initialization-code-at-0xfffffff0h), a discussion about the i386 reset vector, referencing Coreboot documentation.
+
+
+BIOS
+----
+
+The BIOS (Basic Input/Output System) is the firmware in IBM PC compatible
+systems which provides basic runtime services during system initialization and
+boot up. Older Operating Systems, like MS-DOS, used it for I/O exclusively,
+newer Operating Systems almost never call into the BIOS after starting up.
+
+The BIOS provides services via interrupt handlers, similarly to how an OS
+provides system calls to userspace process.
+
+Interesting resources:
+
+   * [Ralf Brown's Interrupt List](http://www.cs.cmu.edu/~ralf/files.html), the
+     authoritative source for BIOS / DOS calls and programming in x86 Assembly.
+   * [Ralf Brown's Interrupt List - HTML Version](https://www.ctyme.com/rbrown.htm),
+     an HTML index of the same list.
+
+SeaBIOS
+-------
+
+SeaBIOS is an open source BIOS implementation. QEMU uses SeaBIOS as its
+canonical BIOS.
+
+
+Build
+"""""
+
+> **TODO** Add instructions about how to download and build SeaBIOS and SeaVGABIOS with debug symbols.
+> Use these artifacts with QEMU + gdb.
 
 
 PIO - Port-Mapped I/O (PMIO)
@@ -267,11 +320,15 @@ PIO - Memory-Mapped I/O (MMIO)
 ------------------------------
 
 
-SeaBIOS
--------
-
-
 Debian
 ------
 
+
+Write your own OS
+-----------------
+
+Interesting resources
+
+   * [OSDev Wiki](https://wiki.osdev.org/Expanded_Main_Page), a collection of articles on OS Development.
+   * [The little book about OS development](https://littleosbook.github.io/), a very interesting book on writing your own OS.
 
