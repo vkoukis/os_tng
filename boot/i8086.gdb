@@ -463,3 +463,6 @@ define i86-step_until_code
   i86-context
 end
 
+define i86-xi
+	x/20i $cs*16+$eip
+end
