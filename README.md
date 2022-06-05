@@ -218,10 +218,24 @@ Use QEMU to inspect the current state of the VM, right after reset:
 1. Press `Alt-2` to move to the QEMU monitor, and use the `info registers` command:
       ```
       (qemu) info registers
+      EAX=00000000 EBX=00000000 ECX=00000000 EDX=00000663
+      ESI=00000000 EDI=00000000 EBP=00000000 ESP=00000000
+      EIP=0000fff0 EFL=00000002 [-------] CPL=0 II=0 A20=1 SMM=0 HLT=0
+      ES =0000 00000000 0000ffff 00009300
+      CS =f000 ffff0000 0000ffff 00009b00
       ```
 
    Note the CS descriptor base is waaaay over 1MB (essentially,
    [Unreal mode](https://wiki.osdev.org/Unreal_Mode))
+
+   > **Note**
+   > The `vnc` and `curses` display modes of QEMU don't seem to support
+   > scrolling in the QEMU monitor.
+   > Try running with no display, or with `-display vnc=0:0` instead, to
+   > allow the QEMU monitor to run directly on your terminal, `-monitor stdio`.
+   > ```
+   > qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.raw.bin -display none -monitor stdio -s -S
+   > ```
 
 1. Note how the first command is a `JMP FAR` command:
       ```
