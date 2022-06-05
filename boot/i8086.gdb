@@ -9,7 +9,7 @@
 
 set confirm off
 set verbose off
-set prompt \033[31mreal-mode-gdb$ \033[0m
+set prompt (gdb-i8086)\ 
 
 set output-radix 0d10
 set input-radix 0d10
@@ -33,15 +33,15 @@ set $ADDRESS_MASK = 0x1FFFFF
 # nb of instructions to display
 set $CODE_SIZE = 10
 
-define enable-a20
+define i86-enable-a20
   set $ADDRESS_MASK = 0x1FFFFF
 end
-define disable-a20
+define i86-disable-a20
   set $ADDRESS_MASK = 0x0FFFFF
 end
 
 # convert segment:offset address to physical address
-define r2p
+define i86-r2p
   if $argc < 2
     printf "Arguments: segment offset\n"
   else
@@ -49,27 +49,27 @@ define r2p
     printf "0x%05X\n", $ADDR
   end
 end
-document r2p
+document i86-r2p
 Convert segment:offset address to physical address
 Set the global variable $ADDR to the computed one
 end
 
 # get address of Interruption
-define int_addr
+define i86-int_addr
   if $argc < 1
     printf "Argument: interruption_number\n"
   else
     set $offset = (unsigned short)*($arg0 * 4)
     set $segment = (unsigned short)*($arg0 * 4 + 2)
-    r2p $segment $offset
+    i86-r2p $segment $offset
     printf "%04X:%04X\n", $segment, $offset
   end
 end
-document int_addr
+document i86-int_addr
 Get address of interruption
 end
 
-define compute_regs
+define i86-compute_regs
   set $rax = ((unsigned long)$eax & 0xFFFF)
   set $rbx = ((unsigned long)$ebx & 0xFFFF)
   set $rcx = ((unsigned long)$ecx & 0xFFFF)
@@ -87,7 +87,7 @@ define compute_regs
   set $r_ss_bp = ((((unsigned long)$ss & 0xFFFF) << 4) + ((unsigned long)$ebp & 0xFFFF)) & $ADDRESS_MASK
 end
 
-define print_regs
+define i86-print_regs
   printf "AX: %04X BX: %04X ", $rax, $rbx
   printf "CX: %04X DX: %04X\n", $rcx, $rdx
   printf "SI: %04X DI: %04X ", $rsi, $rdi
@@ -100,11 +100,11 @@ define print_regs
   printf "SS:SP: %04X:%04X (0x%05X)\n", $rss, $rsp, $r_ss_sp
   printf "SS:BP: %04X:%04X (0x%05X)\n", $rss, $rbp, $r_ss_bp
 end
-document print_regs
+document i86-print_regs
 Print CPU registers
 end
 
-define print_eflags
+define i86-print_eflags
     printf "OF <%d>  DF <%d>  IF <%d>  TF <%d>",\
            (($eflags >> 0xB) & 1), (($eflags >> 0xA) & 1), \
            (($eflags >> 9) & 1), (($eflags >> 8) & 1)
@@ -118,14 +118,14 @@ define print_eflags
            (($eflags >> 0x11) & 1), (($eflags >> 0x10) & 1),\
            (($eflags >> 0xE) & 1), (($eflags >> 0xC) & 3)
 end
-document print_eflags
+document i86-print_eflags
 Print eflags register.
 end
 
 # dump content of bytes in memory
 # arg0 : addr
 # arg1 : nb of bytes
-define _dump_memb
+define i86-_dump_memb
   if $argc < 2
     printf "Arguments: address number_of_bytes\n"
   else
@@ -142,7 +142,7 @@ end
 # dump content of memory in words
 # arg0 : addr
 # arg1 : nb of words
-define _dump_memw
+define i86-_dump_memw
   if $argc < 2
     printf "Arguments: address number_of_words\n"
   else
@@ -157,7 +157,7 @@ define _dump_memw
 end
 
 # display data at given address
-define print_data
+define i86-print_data
        if ($argc > 0)
        	  set $seg = $arg0
 	  set $off = $arg1
@@ -190,21 +190,21 @@ define print_data
        end
 end
 
-define context
+define i86-context
   printf "---------------------------[ STACK ]---\n"
-  _dump_memw $r_ss_sp 8
+  i86-_dump_memw $r_ss_sp 8
   printf "\n"
   set $_a = $r_ss_sp + 16
-  _dump_memw $_a 8
+  i86-_dump_memw $_a 8
   printf "\n"
   printf "---------------------------[ DS:SI ]---\n"
-  print_data $ds $rsi
+  i86-print_data $ds $rsi
   printf "---------------------------[ ES:DI ]---\n"
-  print_data $es $rdi
+  i86-print_data $es $rdi
 
   printf "----------------------------[ CPU ]----\n"
-  print_regs
-  print_eflags
+  i86-print_regs
+  i86-print_eflags
   printf "---------------------------[ CODE ]----\n"
 
   set $_code_size = $CODE_SIZE
@@ -221,14 +221,14 @@ define context
     set $_code_size--
   end
 end
-document context
+document i86-context
 Print context window, i.e. regs, stack, ds:esi and disassemble cs:eip.
 end
 
 define hook-stop
-  compute_regs
+  i86-compute_regs
   if ($SHOW_CONTEXT > 0)
-    context
+    i86-context
   end
 end
 document hook-stop
@@ -236,14 +236,14 @@ document hook-stop
 end
 
 # add a breakpoint on an interrupt
-define break_int
+define i86-break_int
     set $offset = (unsigned short)*($arg0 * 4)
     set $segment = (unsigned short)*($arg0 * 4 + 2)
 
     break *$offset
 end
 
-define break_int_if_ah
+define i86-break_int_if_ah
   if ($argc < 2)
     printf "Arguments: INT_N AH\n"
   else
@@ -252,11 +252,11 @@ define break_int_if_ah
     break *$addr if ((unsigned long)$eax & 0xFF00) == ($arg1 << 8)
   end
 end
-document break_int_if_ah
+document i86-break_int_if_ah
 Install a breakpoint on INT N only if AH is equal to the expected value
 end
 
-define break_int_if_ax
+define i86-break_int_if_ax
   if ($argc < 2)
     printf "Arguments: INT_N AX\n"
   else
@@ -265,11 +265,11 @@ define break_int_if_ax
     break *$addr if ((unsigned long)$eax & 0xFFFF) == $arg1
   end
 end
-document break_int_if_ax
+document i86-break_int_if_ax
 Install a breakpoint on INT N only if AX is equal to the expected value
 end
 
-define stepo
+define i86-stepo
   ## we know that an opcode starting by 0xE8 has a fixed length
   ## for the 0xFF opcodes, we can enumerate what is possible to have
 
@@ -353,13 +353,13 @@ define stepo
     nexti
   end
 end
-document stepo
+document i86-stepo
 Step over calls
 This function will set a temporary breakpoint on next instruction after the call so the call will be bypassed
 You can safely use it instead nexti since it will single step code if it's not a call instruction (unless you want to go into the call function)
 end
 
-define step_until_iret
+define i86-step_until_iret
   set $SHOW_CONTEXT=0
   set $_found = 0
   while (!$_found)
@@ -370,10 +370,10 @@ define step_until_iret
     end
   end
   set $SHOW_CONTEXT=1
-  context
+  i86-context
 end
 
-define step_until_ret
+define i86-step_until_ret
   set $SHOW_CONTEXT=0
   set $_found = 0
   while (!$_found)
@@ -385,23 +385,23 @@ define step_until_ret
     end
   end
   set $SHOW_CONTEXT=1
-  context
+  i86-context
 end
 
-define step_until_int
+define i86-step_until_int
   set $SHOW_CONTEXT = 0
 
   while (*(unsigned char*)$rip != 0xCD)
     stepo
   end
   set $SHOW_CONTEXT = 1
-  context
+  i86-context
 end
 
 # Find a pattern in memory
 # The pattern is given by a string as arg0
 # If another argument is present it gives the starting address (0 otherwise)
-define find_in_mem
+define i86-find_in_mem
   if ($argc >= 2)
     set $_addr = $arg1
   else
@@ -429,14 +429,14 @@ define find_in_mem
     set $_addr++
   end
 end
-document find_in_mem
+document i86-find_in_mem
  Find a pattern in memory
  The pattern is given by a string as arg0
  If another argument is present it gives the starting address (0 otherwise)
 end
 
 
-define step_until_code
+define i86-step_until_code
   set $_tofind = $arg0
   set $SHOW_CONTEXT = 0
 
@@ -460,6 +460,6 @@ define step_until_code
   end
 
   set $SHOW_CONTEXT = 1
-  context
+  i86-context
 end
 
