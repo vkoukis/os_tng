@@ -1,0 +1,3 @@
+[submodule "boot/seabios"]
+	path = boot/seabios
+	url = https://git.seabios.org/seabios.git
