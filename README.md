@@ -285,13 +285,75 @@ Interesting resources:
      the authoritative documentation on low-level programming in Assembly on
      the Intel x86 architecture.
 
-   * [Legacy iAPX 86,88 User's
-     Manual](http://bitsavers.informatik.uni-stuttgart.de/components/intel/_dataBooks/1981_iAPX_86_88_Users_Manual.pdf),
+   * [Legacy iAPX 86,88 User's Manual](http://bitsavers.informatik.uni-stuttgart.de/components/intel/_dataBooks/1981_iAPX_86_88_Users_Manual.pdf),
      a much older, much simpler manual by Intel for the 8086/88. Contains
      simple descriptions of how interrupts, ports, exceptions work. Ignore some
      really obsolete sections [PL/M?]
 
    * [Software initialization code at 0xFFFFFFF0H](https://stackoverflow.com/questions/9210296/software-initialization-code-at-0xfffffff0h), a discussion about the i386 reset vector, referencing Coreboot documentation.
+
+
+Debug 16-bit code
+-----------------
+
+We can improve our debugging experience by helping gdb
+associate memory addresses with lines of source code.
+
+Gdb uses extra information called "debug symbols". Executables have special
+sections which contain debug symbols. But our simple boot sectors are flat
+512-byte files, meant to execute as absolute code, directly on the machine,
+in 16-bit mode.
+
+We can help gdb by producing intermediate ELF executables, which we will
+not run on the actual machine, but we can use with gdb while debugging.
+
+Here is an [interesting tutorial](https://stackoverflow.com/questions/32955887/how-to-disassemble-16-bit-x86-boot-sector-code-in-gdb-with-x-i-pc-it-gets-tr):
+
+1. Assemble into ELF32 and include debugging information in DWARF format:
+      ```
+      $ nasm -f elf32 -g -F dwarf floppy0.dbg.asm -o floppy.dbg.o
+      ```
+   Note the file doesn't include any information on the start address,
+   `0000:7c00`, we use the linker for this.
+
+1. Link the object which now contains debug symbols into an ELF i386 executable,
+   and set `0x7c00` as its start address, so the actual code is correct:
+      ```
+      $ ld -Ttext=0x7c00 -melf_i386 floppy0.dbg.o -o floppy0.dbg.elf
+      ld: warning: cannot find entry symbol _start; defaulting to 0000000000007c00
+      ```
+
+1. Dump the code into a flat binary, so we can extract our 512-byte boot sector
+      ```
+      $ objcopy -O binary floppy0.dbg.elf floppy0.dbg.dump
+      ```
+
+1. Finally, extract the first 512 bytes of this file, which is the usable code we need:
+      ```
+      $ dd if=floppy0.dbg.dump of=floppy0.dbg.bin bs=512 count=1
+      ```
+
+   > **Todo** Why does `objcopy` produce a file this big? Limit the size of the `.text` segment?
+
+1. Confirm the final 512-byte binary matches our original binary, bit for bit:
+      ```
+      $ md5sum floppy0.{raw,dbg}.bin
+      ```
+
+Note the repository contains a simple `Makefile`, which you can use to build all artifacts directly:
+   ```
+   $ make clean
+   rm -f *.bin *.dump *.elf *.o
+   $ make
+   nasm -f bin floppy1.raw.asm -o floppy1.raw.bin
+   nasm -f bin floppy2.raw.asm -o floppy2.raw.bin
+   nasm -f bin floppy3.raw.asm -o floppy3.raw.bin
+   nasm -f bin floppy4.raw.asm -o floppy4.raw.bin
+   nasm -f elf32 -g -F dwarf floppy0.dbg.asm -o floppy0.dbg.o
+   ld -Ttext=0x7c00 -melf_i386 floppy0.dbg.o -o floppy0.dbg.elf
+   [...]
+   ```
+$ make clean && make
 
 
 BIOS

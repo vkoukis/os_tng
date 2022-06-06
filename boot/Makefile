@@ -10,7 +10,7 @@ all: floppy0.raw.bin floppy1.raw.bin floppy2.raw.bin floppy3.raw.bin floppy4.raw
 
 .PHONY: clean
 clean:
-	rm -f *.bin *.bin.full *.elf *.o
+	rm -f *.bin *.dump *.elf *.o
 
 # Assemble via NASM -> ld -> objcopy to have elf files with debugging information
 %.dbg.o: %.dbg.asm
