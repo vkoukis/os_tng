@@ -334,8 +334,381 @@ PIO - Memory-Mapped I/O (MMIO)
 ------------------------------
 
 
-Debian
-------
+Debian bootstrap
+----------------
+
+Deploy Debian, boot Debian with debootstrap:
+
+   > **WARNING** You will be manipulating partitions directly,
+   > as root. BE CAREFUL, make sure you are always manipulating
+   > the virtual hard disk, you don't want to inadvertently re-partition
+   > the hard drive on your physical host.
+
+   > **NOTE** This section assumes a Debian-like host, e.g., a recent
+   > version of Debian or Ubuntu deployment. These instructions have been
+   > verified to work on Debian buster distribution on WSL 2.
+   >
+   > PRs with fixes/improvements/contributions are always welcome!
+
+1. Create a big file which will become our hard disk image, 1GB in size, name it `hd0.raw`.
+      ```
+      $ dd if=/dev/zero of=hd0.raw bs=1M count=1024
+      ```
+
+   > **Question** Why is this a `.raw` file?
+   > Are there are hard disk image types for VMs, and how do they differ?
+
+1. Make it appear as a block device, so you can manipulate it
+      ```
+      # losetup /dev/loop0 hd0.raw
+      ```
+
+1. Create new partition table, single Linux partition:
+   > **FIXME** The output doesn't correspond to a 1GB block device
+      ```
+      # fdisk /dev/loop0
+      Welcome to fdisk (util-linux 2.33.1).
+      Changes will remain in memory only, until you decide to write them.
+      [...]
+      Device does not contain a recognized partition table.
+      Created a new DOS disklabel with disk identifier 0x6eee97b0.
+
+      Command (m for help): p
+      Disk /dev/loop0: 512 MiB, 536870912 bytes, 1048576 sectors
+      Units: sectors of 1 * 512 = 512 bytes
+      Sector size (logical/physical): 512 bytes / 512 bytes
+      I/O size (minimum/optimal): 512 bytes / 512 bytes
+      Disklabel type: dos
+      Disk identifier: 0x6eee97b0
+
+      Command (m for help): n
+      Partition type
+         p   primary (0 primary, 0 extended, 4 free)
+         e   extended (container for logical partitions)
+      Select (default p): p
+      Partition number (1-4, default 1):
+      First sector (2048-1048575, default 2048):
+      Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-1048575, default 1048575):
+
+      Created a new partition 1 of type 'Linux' and of size 511 MiB.
+
+      Command (m for help): p
+      Disk /dev/loop0: 1 GiB, 1073741824 bytes, 2097152 sectors
+      Units: sectors of 1 * 512 = 512 bytes
+      Sector size (logical/physical): 512 bytes / 512 bytes
+      I/O size (minimum/optimal): 512 bytes / 512 bytes
+      Disklabel type: dos
+      Disk identifier: 0xcdbe24d5
+
+      Device       Boot Start     End Sectors  Size Id Type
+      /dev/loop0p1       2048 2097151 2095104 1023M 83 Linux
+
+      Command (m for help): w
+      The partition table has been altered.
+      Calling ioctl() to re-read partition table.
+      Re-reading the partition table failed.: Invalid argument
+      ```
+
+1. Re-configure the virtual block device, so the kernel knows it contains
+   distinct partitions now:
+      ```
+      # losetup -d /dev/loop0
+      # losetup -P /dev/loop0 hd0.raw
+      # ls /dev/loop0<TAB>
+      loop0#   loop0p1#
+      ```
+
+1. Create an ext4 filesystem to hold Debian's root filesystem, `/`:
+      ```
+      # mkfs.ext4 /dev/loop0p1
+      mke2fs 1.44.5 (15-Dec-2018)
+      ext2fs_check_if_mount: Can't check if filesystem is mounted due to missing mtab file while determining whether /dev/loop0p1 is mounted.
+      Discarding device blocks: done
+      Creating filesystem with 261888 4k blocks and 65536 inodes
+      Filesystem UUID: 5a4808b5-cbd0-4e45-bf8f-74e180a16e1c
+      Superblock backups stored on blocks:
+              32768, 98304, 163840, 229376
+
+      Allocating group tables: done
+      Writing inode tables: done
+      Creating journal (4096 blocks): done
+      Writing superblocks and filesystem accounting information: done
+      ```
+
+1. Actually confirm we have created an ext4 filesystem, by examining
+   the first few sectors of the whole (virtual) disk, and the partition:
+      ```
+      # dd if=/dev/loop0 bs=512 count=1|file -
+      [...]
+      /dev/stdin: DOS/MBR boot sector; partition 1 : ID=0x83, start-CHS (0x0,32,33), end-CHS (0x41,69,4), startsector 2048, 1046528 sectors, extended partition table (last)
+      # dd if=/dev/loop0 bs=512 count=10 skip=2048|file -
+      [...]
+      /dev/stdin: Linux rev 1.0 ext4 filesystem data, UUID=a60d5690-f9ff-4440-ba1d-1906607dda9c (extents) (64bit) (large files) (huge files)
+      ```
+
+1. Use Debian's `debootstrap` tool to create a Debian root for bullseye:
+      ```
+      # mkdir /srv/debian
+      # mount /dev/loop0p1 /srv/debian/
+      # debootstrap bullseye /srv/debian http://deb.debian.org/debian
+      I: Target architecture can be executed
+      I: Retrieving InRelease
+      I: Checking Release signature
+      I: Valid Release signature (key id A4285295FC7B1A81600062A9605C66F00D6C9793)
+      I: Retrieving Packages
+      [...]
+      I: Configuring libc-bin...
+      I: Base system installed successfully.
+
+1. Mount the `/proc` and `/sys` special filesystems and switch root into the
+   new deployment. This way, we can use the deployment as if we have booted it
+   directly, and install a few extra packages in the next step.
+      ```
+      host:/# cd /srv/debian
+      host:/srv/debian# mount proc proc -t proc
+      host:/srv/debian# mount sys sys -t sysfs
+      host:/srv/debian# echo utopia >etc/hostname
+      host:/srv/debian# chroot .
+      chroot:/#
+      ```
+
+   > **WARNING** Pay attention to the prompts, make sure you know when you are running something
+   > in the new Debian chroot, or on your own host:
+   >    ```
+   >    host:/srv/debian# # This command runs on the host
+   >    chroot:/# # This command runs in the chroot
+   >    ```
+
+1. Now that you are inside the chroot, install extra packages for the GRUB 2
+   bootloader and the Linux kernel. We will use them later on, when booting the virtual
+   hard disk on the QEMU VM.
+      ```
+      chroot:/# apt-get install linux-image-amd64
+      [...]
+      /etc/kernel/postinst.d/initramfs-tools:
+      update-initramfs: Generating /boot/initrd.img-5.10.0-13-amd64
+      Setting up linux-image-amd64 (5.10.106-1) ...
+      Processing triggers for initramfs-tools (0.140) ...
+      update-initramfs: Generating /boot/initrd.img-5.10.0-13-amd64
+      chroot:/# apt-get install grub2
+      ```
+
+1. Finally, exit the chroot:
+      ```
+      chroot:/# exit
+      host:/srv/debian#
+      ```
+
+At this point you are ready to Install the GRUB boot loader directly into
+the whole device. Here is a [useful blog post]
+(https://www.shinypile.com/p/how-to-install-grub-to-a-loopback-device/).
+
+1. First, confirm there is a `/boot` directory containing a Linux kernel and an
+   initramfs inside your partition:
+      ```
+      /srv/debian# ls -la boot
+      [...]
+      -rw-r--r--  1 root root  6840768 Mar 17 17:40 vmlinuz-5.10.0-13-amd64
+      ```
+
+1. Install `grub2` on your **host** computer, if it's not already installed on
+   your host: [WSL 2 distributions don't include it normally]
+
+   host:/# dpkg -l | grep grub2
+   host:/# apt-get install grub2
+
+1. Install `grub2 directly into the hard disk image, and ask it to use `/boot` under
+   the already mounted `/srv/debian` directory to hold its configuration files:
+      ```
+      host:/# grub-install --target=i386-pc --recheck --boot-directory=/srv/debian/boot /dev/loop0
+      ```
+   At this point GRUB 2 will overwrite the MBR of `/dev/loop0`, will write its Stage 1.5
+   `core.img` into the unallocated sectors between the MBR and the start of the first partition
+   [sector `2048`, see the output of `fdisk -l` above], and will place its modules [Stage 2]
+   under `/boot/grub` inside the mounted partition.
+
+   > **Note** This is the step most likely to fail.
+   > If it does, go over all of the commands you have run so far, keep a log of them
+   > and their output, and open a new issue in this repository.
+
+1. Finally, unmount everything, so you are ready to boot your new hard disk image
+   with QEMU.
+   > **WARNING** You **must** unmount everything. Otherwise, two distinct Linux kernels,
+   > the kernel on the host and the kernel inside the VM will be accessing the same
+   > filesystem concurrently, without any synchronization, and you will probably lose data.
+      ```
+      host:/srv/debian# cd /
+      host:/# umount /srv/debian/proc
+      host:/# umount /srv/debian/sys
+      host:/# umount /srv/debian
+
+   > **Note** Errors like this means someone is still using the mount point
+   > you are attempting to unmount. Could it be you're still working inside it?
+   > Use `cd` to move out of it.
+   >    ```
+   >    host:/srv/debian# umount /srv/debian
+   >    umount: /srv/debian: target is busy.
+
+You are now ready to boot your new hard disk image with QEMU.
+
+1. Expand your QEMU command line to define an extra SCSI controller of type
+   MegaRAID SAS, and attach your new hard disk image to it as a SCSI hard disk.
+   Optionally wait for gdb:
+      ```
+      $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy0.raw.bin -display curses -device megasas,id=scsi -drive file=hd0.raw,id=shd0,if=none,format=raw,cache=none -device scsi-hd,drive=shd0
+      ```
+
+1. Notice how SeaBIOS boots from the hard disk.
+   if all goes well, you should see the GRUB prompt!
+
+   > **TODO** Add a screenshot here.
+
+1. Inspect GRUB. Note it switches to protected mode
+   and `gdb` cannot decode instructions as 8086 anymore.
+   Switch back to the default `i386` architecture when this happens:
+      ```
+      (gdb) set architecture i386
+      (gdb) define hook-stop
+      x/20i *$eip
+      end
+      ```
+
+At this point GRUB doesn't have any default configuration.
+Let's try to boot our kernel manually, and then install a default
+configuration under `/boot/grub/grub.cfg`:
+
+1. Inspect devices and try to boot our kernel manually:
+      ```
+      grub> ls (hd0,msdos1)/boot/<TAB>
+      grub> linux (hd0,msdos1)/boot/vmlinuz-5.10.0-13-amd64
+      grub> initrd (hd0,msdos1)/boot/initrd.img-5.10.0-13-amd64
+      grub> boot
+      ```
+
+   Note this appears to hang. Note `gdb` shows the kernel being
+   stuck in a tight loop. What is happening?
+
+   > **Note** We are trying to boot a kernel targeting x86-64
+   > inside a QEMU VM emulating a 32-bit i386...
+
+1. Switch to `qemu-system-x86_64`. Note the kernel now boots!
+   But it fails to mount its root device. Why does it fail to mount
+   initramfs?
+   > **Note** The kernel emits a ton of logs. Redirect its console
+   > to the virtual serial port, and ask QEMU to redirect the first
+   > serial console to the terminal, so you can inspect kernel output
+   > directly. You also have the option of logging into files, see
+   > the QEMU manpage.
+      ```
+      $ qemu-system-x86_64 -drive if=floppy,index=0,format=raw,file=floppy0.raw.bin -device megasas,id=scsi -drive file=hd0.raw,id=shd0,if=none,format=raw,cache=none -device scsi-hd,drive=shd0 -display vnc=0:0 -serial stdio -L $SB/out
+      ```
+1. Add a kernel command-line argument, so it uses the serial console:
+      ```
+      grub> linux (hd0,msdos1)/boot/vmlinuz-5.10.0-13-amd64 console=ttyS0,115200
+      ```
+   Inspect the kernel log. Why is the kernel failing?
+
+   > **Note** It runs out of memory...
+   > ```
+   > [    1.003840] Trying to unpack rootfs image as initramfs...
+   > [    1.362067] Initramfs unpacking failed: write error
+   > ```
+
+1. Augment your QEMU command line with `-m 1024`. It actually boots into the initramfs.
+      ```
+      [    4.822967] input: ImExPS/2 Generic Explorer Mouse as /devices/platform/i8042/serio1/input/input2
+      [    5.084458] e1000 0000:00:03.0 eth0: (PCI:33MHz:32-bit) 52:54:00:12:34:56
+      [    5.084844] e1000 0000:00:03.0 eth0: Intel(R) PRO/1000 Network Connection
+      [    5.141062] sd 2:2:0:0: [sda] 2097152 512-byte logical blocks: (1.07 GB/1.00 GiB)
+      [    5.141457] sd 2:2:0:0: [sda] Write Protect is off
+      [    5.141846] sd 2:2:0:0: [sda] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+      [    5.154005] e1000 0000:00:03.0 ens3: renamed from eth0
+      [    5.163751]  sda: sda1
+      [    5.184192] sd 2:2:0:0: [sda] Attached SCSI disk
+
+      Begin: Loading essential drivers ... done.
+      Begin: Running /scripts/init-premount ... done.
+      Begin: Mounting root file system ... Begin: Running /scripts/local-top ... done.
+      Begin: Running /scripts/local-premount ... done.
+      No root device specified. Boot arguments must include a root= parameter.
+
+
+      BusyBox v1.30.1 (Debian 1:1.30.1-6+b3) built-in shell (ash)
+      Enter 'help' for a list of built-in commands.
+
+      (initramfs)
+      ```
+
+1. Confirm you can mount the root device manually:
+      ```
+      (initramfs) mount /dev/sda1 /mnt
+      mount: mounting /dev/sda1 on /mnt failed: No such file or directory
+      (initramfs) modprobe ext4
+      (initramfs) mount /dev/sda1 /mnt
+      ```
+
+1. Try again, with an explicit `root=` command-line argument to the kernel:
+      ```
+      grub> linux (hd0,msdos1)/boot/vmlinuz-5.10.0-13-amd64 console=ttyS0,115200 root=/dev/sda1
+      ```
+   It boots! But you probably don't have the root password,
+   and can't log in to the system.
+
+Finally, hack into your new system by using `/bin/bash` as a small init,
+and bypass the password prompts.
+
+> **Question** Does this mean Linux/UNIX password prompts are useless?
+> How can you protect your system against this kind of attack?
+
+1. Use `/bin/bash` as a custom `init`, to bypass all authentication:
+      ```
+      grub> linux (hd0,msdos1)/boot/vmlinuz-5.10.0-13-amd64 init=/bin/bash console=ttyS0,115200 root=/dev/sda1
+      ```
+
+1. Create a new configuration file for grub, so you no longer need to boot
+   manually:
+      ```
+      root@(none):/# update-grub
+      /sbin/grub-mkconfig: 257: cannot create /boot/grub/grub.cfg.new: Read-only file system
+      ```
+
+1. The kernel mounts the root firesystem in read-only mode by default.
+   So, let's remount it, and move on:
+      ```
+      root@(none):/# mount / -o remount,rw
+      root@(none):/# update-grub
+
+1. Create `/etc/fstab`, so systemd will remount the root filesystem rw after
+   boot:
+      ```
+      # echo '/dev/disk/by-uuid/<TAB> / ext4 rw,relatime,errors=remount-ro 0 0 >/etc/fstab
+      ```
+
+1. Edit `/etc/default/grub`, remove the "quiet" part, so we see kernel logs
+   when booting.
+
+1. Finally, change your root password:
+      ```
+      root@(none):/# grep root /etc/shadow
+      root:*:19148:0:99999:7:::
+      root@(none):/# passwd
+      New password:
+      Retype new password:
+      passwd: password updated successfully
+
+1. Make sure to remount as read-only, and reboot:
+      ```
+      root@(none):/# sync
+      root@(none):/# mount / -o remount,ro
+      root@(none):/# echo b >/proc/sysrq-trigger
+      ```
+   > **Note** is running `sync`
+   > [really necessary](https://unix.stackexchange.com/questions/5260/is-there-truth-to-the-philosophy-that-you-should-sync-sync-sync-sync?noredirect=1&lq=1), since we are remounting the filesystem read-only?
+
+Interesting resources:
+
+   * [Debian documentation on debootstrap](https://wiki.debian.org/Debootstrap)
+   * [Ubuntu documentation on debootstrap](https://wiki.ubuntu.com/DebootstrapChroot)
 
 
 Write your own OS
