@@ -383,6 +383,40 @@ canonical BIOS.
 > **TODO** Add instructions about how to download and build SeaBIOS and SeaVGABIOS with debug symbols.
 > Use these artifacts with QEMU + gdb.
 
+After building SeaBIOS, make the new binaries appear exactly
+as QEMU on Debian expects them, and start the VM:
+   ```
+   $ cd $SB/out
+   $ ln -s vgabios.bin vgabios-stdvga.bin
+   $ ln -s bios.bin bios-256k.bin
+   $ objcopy --adjust-vma 0xf0000 out/rom16.o rom16offset.o
+   $ objcopy --adjust-vma 0xc0000 out/vgarom.o vgaromoffset.o
+   $ qemu-system-i386 -drive if=floppy,index=0,format=raw,file=floppy1.raw.bin -display curses -L $SB/out
+   ```
+
+Connect with gdb:
+   ```
+   (gdb) source qemu-i8086.gdb
+   (gdb) source seabios.gdb
+   ```
+
+Inspect internal SeaBIOS state:
+   ```
+   ---------------------------[ CODE ]----
+      0xfe05b:     cmp    DWORD PTR cs:0x61c8,0x0
+      0xfe062:     jne    0xfd0b3 <entry_resume>
+      0xfe066:     xor    dx,dx
+      0xfe068:     mov    ss,dx
+      0xfe06a:     mov    esp,0x7000
+      0xfe070:     mov    edx,0xf0f5e
+      0xfe076:     jmp    0xfcf2a <transition32>
+      0xfe079 <fill_edd>:  push   ebp
+      0xfe07b <fill_edd+2>:        push   edi
+      0xfe07d <fill_edd+4>:        push   esi
+   ?? () at src/romlayout.S:595
+   595             cmpl $0, %cs:HaveRunPost                // Check for resume/reboot
+   ```
+
 
 PIO - Port-Mapped I/O (PMIO)
 ----------------------------
