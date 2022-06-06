@@ -318,16 +318,44 @@ SeaBIOS
 SeaBIOS is an open source BIOS implementation. QEMU uses SeaBIOS as its
 canonical BIOS.
 
-
-Build
-"""""
-
 > **TODO** Add instructions about how to download and build SeaBIOS and SeaVGABIOS with debug symbols.
 > Use these artifacts with QEMU + gdb.
 
 
 PIO - Port-Mapped I/O (PMIO)
 ----------------------------
+
+Let's see [Programmable I/O](https://en.wikipedia.org/wiki/Memory-mapped_I/O)
+in action; PIO means we run CPU instructions to perform I/O.
+Port-mapped I/O means we access a special "port" address space,
+which the processor handles separately from the physical memory space.
+
+We will write a small boot sector to output messages to the first
+[parallel port](https://en.wikipedia.org/wiki/Parallel_port)
+
+   ![legacy ports](http://2.bp.blogspot.com/_XArw5PsJ02E/Swpn6ZhMJsI/AAAAAAAAABc/RZrvk3-mNi0/s400/ports02.jpg)
+
+Code on the CPU controls the first parallel port on the IBM PC via
+a series of I/O ports starting at 378h.
+
+1. Run `floppy2.raw.asm`.
+
+1. Use the debugger to inspect the state of the CPU while controlling the port
+   directly.
+
+1. Compare with using the BIOS.
+
+> **Question** Which approach is simpler, using the BIOS, or programming
+the ports directly?
+
+> **Question** Controlling the parallel port requires delays. How can one
+> implement these delays in software, what are the trade-offs?
+> See an older [comp.os.msdos.programmer post](https://groups.google.com/g/comp.os.msdos.programmer/c/ba4HQF3EaMA)
+
+Interesting resources
+
+   * [IBM Parallel Port FAQ/Tutorial](http://www.sfu.ca/phys/430/datasheets/parport.html)
+   * [PRINTER - WRITE CHARACTER from Ralf Brown's interrupt list](http://www.ctyme.com/intr/rb-2098.htm)
 
 
 PIO - Memory-Mapped I/O (MMIO)
