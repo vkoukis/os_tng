@@ -361,6 +361,46 @@ Interesting resources
 PIO - Memory-Mapped I/O (MMIO)
 ------------------------------
 
+Let's see [Programmable I/O](https://en.wikipedia.org/wiki/Memory-mapped_I/O)
+with Memory-mapped I/O in action; PIO means we run CPU instructions to perform I/O.
+Memory-mapped I/O means we access standard memory ranges in the physical address
+space, but reads and writes to these ranges have side-effects in the physical
+world.
+
+We will use the VGA console as an example.
+Traditionally, the system maps the framebuffer of the VGA card at
+real-mode address `B800:0000`, physical address `0xB8000`.
+
+1. Run `floppy3.raw.asm`
+
+1. Use the debugger to inspect the state of the CPU while writing
+   to the Memory-mapped framebuffer directly.
+
+1. Compare with using BIOS `int 10h` calls.
+
+> **Note**
+> Compare with `floppy3.raw.asm` with the equivalent C code
+> in `vgafb.c`.
+> Ask the C compiler to produce the intermediate Assembly:
+>    ```
+>    gcc -S -o vgafb.s vgafb.c
+>    ```
+>
+> Experiment with different optimization levels:
+>    ```
+>    gcc -O3 -S -o vgafb.s vgafb.c
+>    ```
+<!-- #> Note how the compiler takes advantage of the fact that
+#>    ```
+#>    160 * x = 2 * 80 * x = 2 * (16 * 5 * x) = 2 * ((5 * x) << 4) = ((4 * x + x) << 4) << 1
+#>    ``` -->
+>
+> Note 16-bit code [doesn't support scaling](https://stackoverflow.com/questions/55657904/why-dont-x86-16-bit-addressing-modes-have-a-scale-factor-while-the-32-bit-vers) when computing effecting addresses.
+
+Interesting resources:
+
+   * [Text UI at OSDev](https://wiki.osdev.org/Text_UI)
+
 
 Debian bootstrap
 ----------------
