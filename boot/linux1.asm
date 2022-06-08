@@ -25,7 +25,7 @@ sigaction:				; struct sigaction {
 		dd handle_sigsegv	;	void (*sa_handler)(int);
 		; Omitted, union	;	void (*sa_sigaction)(int, siginfo_t *, void *);
 		times 128 db 0 		;	sigset_t sa_mask;
-		db 0			;	int sa_flags;
+		dd 0			;	int sa_flags;
 		; Not for app use 	;	void (*sa_restorer)(void);
 					; };
 _start:		mov eax, sys_write	; sys_write
