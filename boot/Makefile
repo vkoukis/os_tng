@@ -6,9 +6,9 @@ OBJCOPY = objcopy
 DD = dd
 
 .PHONY: all
-all: floppy0.raw.bin floppy1.raw.bin floppy2.raw.bin floppy3.raw.bin floppy4.raw.bin \
-     floppy0.dbg.bin floppy1.dbg.bin floppy2.dbg.bin floppy3.dbg.bin floppy4.dbg.bin \
-     floppy0.dbg.elf floppy1.dbg.elf floppy2.dbg.elf floppy3.dbg.elf floppy4.dbg.elf \
+all: floppy0.raw.bin floppy1.raw.bin floppy2.raw.bin floppy3.raw.bin floppy4.raw.bin floppy5.raw.bin \
+     floppy0.dbg.bin floppy1.dbg.bin floppy2.dbg.bin floppy3.dbg.bin floppy4.dbg.bin floppy5.dbg.bin \
+     floppy0.dbg.elf floppy1.dbg.elf floppy2.dbg.elf floppy3.dbg.elf floppy4.dbg.elf floppy5.dbg.elf \
      linux0.exe linux1.exe sizes.exe
 
 .PHONY: clean
